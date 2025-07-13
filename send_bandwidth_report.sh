@@ -52,7 +52,7 @@ uci show dhcp | grep 'dhcp.@host' | while read -r line; do
 done
 
 # === Step 2: Collect Usage Data (already sorted by download) ===
-nlbw -n -c show -g ip -o -tx | tail -n +2 | awk '{print $1, $3, $8}' | while read -r IP TX RX; do
+nlbw -n -c show -g ip -o -rx | sed 's/B/ B/g' | tail -n +2 | awk '{print $1, $3, $8}' | while read -r IP RX TX; do
     # Remove non-numeric characters from RX and TX (Bytes only)
     RX_BYTES=$(echo "$RX" | sed 's/[^0-9]//g')
     TX_BYTES=$(echo "$TX" | sed 's/[^0-9]//g')
@@ -86,14 +86,17 @@ nlbw -n -c show -g ip -o -tx | tail -n +2 | awk '{print $1, $3, $8}' | while rea
     TX_HR=$(to_human "$TX_BYTES")
 
     echo "Device: $NAME" >> "$OUTFILE"
-    echo "Download: $TX_HR" >> "$OUTFILE"
-    echo "Upload: $RX_HR" >> "$OUTFILE"
+    echo "Download: $RX_HR" >> "$OUTFILE"
+    echo "Upload: $TX_HR" >> "$OUTFILE"
     echo "IP: $IP" >> "$OUTFILE"
     echo "" >> "$OUTFILE"
 done
+
+TITLE="📊 Monthly Bandwidth Usage - $(date +'%B %Y')
+"
 
 # === Step 3: Send to Telegram ===
 curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
   -d chat_id="$CHAT_ID" \
   -d parse_mode="Markdown" \
-  --data-urlencode "text=📶 Monthly Bandwidth Usage - $(date +'%B %Y')\n$(cat $OUTFILE)"
+  --data-urlencode "text=$TITLE$(cat $OUTFILE)"
