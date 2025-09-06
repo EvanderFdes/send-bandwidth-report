@@ -70,8 +70,6 @@ crontab -e
 59 23 * * * /root/send_bandwidth_telegram.sh
 ```
 
-> ✅ This clever trick ensures it only runs on the last day of any month.
-
 ---
 
 ## 💬 Telegram Bot Setup
