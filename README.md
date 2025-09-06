@@ -1,6 +1,6 @@
-# 📶 OpenWRT Monthly Bandwidth Report
+# 📶 OpenWRT Bandwidth Report
 
-A shell script that collects monthly per-device bandwidth usage from OpenWRT using `nlbwmon`, maps IPs to static hostnames (if configured), and sends the results to Telegram via a bot.
+A shell script that collects daily per-device bandwidth usage from OpenWRT using `nlbwmon`, maps IPs to static hostnames (if configured), and sends the results to Telegram via a bot.
 
 ---
 
@@ -10,7 +10,7 @@ A shell script that collects monthly per-device bandwidth usage from OpenWRT usi
 - Matches IPs to static DHCP hostnames.
 - Outputs clean device-wise summary.
 - Sends the report via Telegram.
-- Designed to be run automatically at the end of each month.
+- Designed to be run automatically at the end of each day.
 
 ---
 
@@ -21,6 +21,7 @@ Ensure the following packages are installed on your OpenWRT router:
 ```sh
 opkg update
 opkg install nlbwmon curl
+opkg install jq
 ```
 
 ---
@@ -55,7 +56,7 @@ chmod +x /root/send_bandwidth_report.sh
 
 ## 🕐 Automate with Cron
 
-To run the script automatically on the **last day of each month** at 11:55 PM:
+To run the script automatically at 11:59 PM **daily** :
 
 1. Open the cron config:
 
@@ -66,7 +67,7 @@ crontab -e
 2. Add this line:
 
 ```cron
-55 23 28-31 * * [ "$(date +\%d -d tomorrow)" == "01" ] && /root/send_bandwidth_report.sh
+59 23 * * * /root/send_bandwidth_telegram.sh
 ```
 
 > ✅ This clever trick ensures it only runs on the last day of any month.
@@ -109,7 +110,7 @@ Feel free to fork, modify, and submit PRs! If you improve the sorting logic or a
 ## 💡 Sample Output
 
 ```
-📶 Monthly Bandwidth Usage - July 2025
+📶 Bandwidth Usage - September 06 2025
 
 Device: MSI-Laptop-5Ghz
 Download: 82.30 MB
