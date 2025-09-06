@@ -32,6 +32,7 @@ TOKEN="your_bot_token_here"
 CHAT_ID="your_chat_id_here"
 MAPFILE="/tmp/ip_name_map.txt"
 OUTFILE="/tmp/bandwidth_report.txt"
+JSONFILE="/tmp/nlbwmon_dump.json"
 > "$MAPFILE" > "$OUTFILE"
 
 # === Step 1: Build IP -> Hostname Map from uci ===
@@ -51,13 +52,21 @@ uci show dhcp | grep 'dhcp.@host' | while read -r line; do
     esac
 done
 
-# === Step 2: Collect Usage Data (already sorted by download) ===
-nlbw -n -c show -g ip -o -rx | sed 's/B/ B/g' | tail -n +2 | awk '{print $1, $3, $8}' | while read -r IP RX TX; do
-    # Remove non-numeric characters from RX and TX (Bytes only)
-    RX_BYTES=$(echo "$RX" | sed 's/[^0-9]//g')
-    TX_BYTES=$(echo "$TX" | sed 's/[^0-9]//g')
+# === Step 2: Dump nlbwmon JSON to file ===
+nlbw -n -c json -g ip -o -rx > "$JSONFILE"
 
-    # Skip if download is 0
+# === Step 3: Parse Usage Data from JSON file ===
+# Get column indexes
+IP_IDX=$(jq -r '.columns | index("ip")' "$JSONFILE")
+RX_IDX=$(jq -r '.columns | index("rx_bytes")' "$JSONFILE")
+TX_IDX=$(jq -r '.columns | index("tx_bytes")' "$JSONFILE")
+
+jq -c '.data[]' "$JSONFILE" | while read -r row; do
+    IP=$(echo "$row" | jq -r ".[$IP_IDX]")
+    RX_BYTES=$(echo "$row" | jq -r ".[$RX_IDX]")
+    TX_BYTES=$(echo "$row" | jq -r ".[$TX_IDX]")
+
+    # Skip if download is 0 or missing
     [ -z "$RX_BYTES" ] || [ "$RX_BYTES" -eq 0 ] && continue
 
     # Find hostname from map
@@ -66,21 +75,21 @@ nlbw -n -c show -g ip -o -rx | sed 's/B/ B/g' | tail -n +2 | awk '{print $1, $3,
 
     # Convert bytes to human-readable format
     to_human() {
-		B="$1"
-		if ! echo "$B" | grep -qE '^[0-9]+$'; then
-			echo "0 B"
-			return
-		fi
-		if [ "$B" -ge 1073741824 ]; then
-			awk -v val="$B" 'BEGIN { printf "%.2f GB", val/1073741824 }'
-		elif [ "$B" -ge 1048576 ]; then
-			awk -v val="$B" 'BEGIN { printf "%.2f MB", val/1048576 }'
-		elif [ "$B" -ge 1024 ]; then
-			awk -v val="$B" 'BEGIN { printf "%.2f KB", val/1024 }'
-		else
-			echo "${B} B"
-		fi
-	}
+        B="$1"
+        if ! echo "$B" | grep -qE '^[0-9]+$'; then
+            echo "0 B"
+            return
+        fi
+        if [ "$B" -ge 1073741824 ]; then
+            awk -v val="$B" 'BEGIN { printf "%.2f GB", val/1073741824 }'
+        elif [ "$B" -ge 1048576 ]; then
+            awk -v val="$B" 'BEGIN { printf "%.2f MB", val/1048576 }'
+        elif [ "$B" -ge 1024 ]; then
+            awk -v val="$B" 'BEGIN { printf "%.2f KB", val/1024 }'
+        else
+            echo "${B} B"
+        fi
+    }
 
     RX_HR=$(to_human "$RX_BYTES")
     TX_HR=$(to_human "$TX_BYTES")
@@ -92,10 +101,10 @@ nlbw -n -c show -g ip -o -rx | sed 's/B/ B/g' | tail -n +2 | awk '{print $1, $3,
     echo "" >> "$OUTFILE"
 done
 
-TITLE="📊 Monthly Bandwidth Usage - $(date +'%B %Y')
+TITLE="📊 Bandwidth Usage - $(date +'%B %d %Y')
 "
 
-# === Step 3: Send to Telegram ===
+# === Step 4: Send to Telegram ===
 curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
   -d chat_id="$CHAT_ID" \
   -d parse_mode="Markdown" \
